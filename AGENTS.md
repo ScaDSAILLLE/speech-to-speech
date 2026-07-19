@@ -1,26 +1,185 @@
 # Repository Instructions
 
-- Never include `codex` in branch names or pull request titles.
-- Keep release pull requests focused on version metadata and release documentation.
-- Do not commit local build artifacts such as `dist/`, `build/`, or generated wheel/sdist files.
+## What this is
 
-## Publishing to PyPI
+A working Raspberry Pi port of the upstream OpenAI-Realtime-compatible
+voice-agent pipeline. End-to-end voice conversation that runs entirely
+on a Pi 5 / Bookworm 64-bit / Cortex-A76, no cloud, no hosted inference.
 
-PyPI publishing is handled by GitHub Actions in `.github/workflows/publish.yml`. The workflow runs on pushed tags that match `v*`, builds the package with `uv build`, checks the artifacts with `twine check --strict`, and publishes through the configured `pypi` environment.
+Forked from [`huggingface/speech-to-speech`](https://github.com/huggingface/speech-to-speech).
+The realtime WebSocket server, the OpenAI Realtime protocol implementation,
+and the demo UI are reused from upstream; the STT and TTS layers were
+re-wired through in-process OpenAI-compatible HTTP clients so each
+model can run as its own subprocess.
 
-To prepare a release:
+The end goal is to lift this fork into its own git repository once the
+RPi port is stable. Until then, keep changes self-contained so they
+lift cleanly.
 
-1. Confirm the intended version is not already published on PyPI.
-2. Bump `version` in `pyproject.toml`.
-3. Bump `__version__` in `src/speech_to_speech/__init__.py`.
-4. Open and merge a pull request with only the release preparation changes.
+## Project status (PoC, July 2026)
 
-To publish after the release PR is merged:
+| Stage | Backend (active) | Latency on Pi 5 CPU |
+|-------|------------------|---------------------|
+| VAD | Silero VAD v5 (built-in) | < 50 ms |
+| STT | `faster-whisper base.en` (CTranslate2 int8, in-process) | ~14 s for 5 s audio |
+| LLM | LiteRT-LM Gemma 4 E2B (XNNPack) | ~15 s for short reply |
+| TTS | Supertonic 3 (ONNX, in `supertonic_tts_server.py`) | ~1 s |
 
-1. Update `main` locally: `git checkout main && git pull origin main`.
-2. Create an annotated tag for the version: `git tag -a vX.Y.Z -m "Release vX.Y.Z"`.
-3. Push the tag: `git push origin vX.Y.Z`.
-4. Watch the `Publish` GitHub Actions workflow complete successfully.
-5. Verify the new version appears at `https://pypi.org/project/speech-to-speech/`.
+Total round-trip ≈ 30 s. STT and TTS are CPU-bound but tolerable.
+**The LLM is the bottleneck** — see the Backlog section below.
 
-Only upload manually if the GitHub Actions workflow is unavailable and the maintainers have explicitly chosen that fallback.
+All services are reachable through OpenAI-compatible protocols so the
+existing demo UI and any OpenAI Realtime client work unchanged.
+
+## Quickstart for a coding agent
+
+The Pi needs `uv`, Python 3.10+, `mkcert`, and `ffmpeg`. Once that's set up:
+
+```bash
+git clone <this-repo>
+cd <this-repo>
+
+uv sync --extra rpi                 # creates .venv, installs all RPi backends
+uv run s2s-rpi-setup --fetch        # downloads weights under models/, writes models/.env
+
+source models/.env                  # exports HF_HOME, ports, LITERT_LM_MODEL_ALIAS, …
+./scripts/rpi_start.sh              # foreground; Ctrl-C stops everything
+# or for a daemonised run with PID/log files:
+./scripts/rpi_start.sh --bg
+
+# In a second terminal (or another machine on the LAN):
+curl -sk https://<pi-ip>:7860/api/config    # demo UI config (should 200)
+curl -sk https://<pi-ip>:8765/v1/pool       # pipeline health
+./scripts/verify_rpi_fork.sh               # full smoke test
+```
+
+The browser-side demo UI is at `https://<pi-ip>:7860/`. The mkcert root
+CA lives at `models/tls/rootCA.pem` — import it into the browser's
+trust store once, then a hard reload of the page is enough.
+
+## Where things live
+
+| Path | What it is | Touch with care? |
+|------|------------|-------------------|
+| `src/speech_to_speech/api/openai_realtime/` | Reused WebSocket server | Yes — upstream code, keep changes minimal and self-contained |
+| `src/speech_to_speech/s2s_pipeline.py` | Pipeline assembly + STT/LLM/TTS dispatch | Yes — this is the wiring spine |
+| `src/speech_to_speech/VAD/vad_handler.py` | Silero VAD wrapper + tuning knobs | Maybe — current tuning matches the worked-out values below |
+| `src/speech_to_speech/STT/faster_whisper_handler.py` | In-process faster-whisper STT | No — backend, free to swap |
+| `src/speech_to_speech/STT/moonshine_http_handler.py` | Moonshine HTTP STT client | No — kept for opt-in path |
+| `src/speech_to_speech/TTS/supertonic_http_handler.py` | Supertonic HTTP TTS client | No |
+| `src/speech_to_speech/arguments_classes/` | CLI args per stage | No — change one file per backend |
+| `src/s2s_rpi/setup.py` | `s2s-rpi-setup` CLI: model fetch + env generation | No |
+| `servers/moonshine_stt_server.py` | Moonshine → OpenAI-compatible HTTP server | No — used only if `--stt moonshine-http` |
+| `servers/supertonic_tts_server.py` | Supertonic → OpenAI-compatible HTTP server | No |
+| `scripts/rpi_start.sh` | Orchestrates model servers + pipeline | Yes — flags here are the canonical CLI |
+| `scripts/verify_rpi_fork.sh` | End-to-end smoke test | No |
+| `scripts/_ws_pipeline_probe.py` | WS round-trip probe with synthetic audio | No — diagnostics |
+| `models/.env` | Runtime config (HF cache, ports, model aliases) | Yes — generated by `s2s-rpi-setup`; manual edits are fine but the next setup run will compare-and-rewrite |
+| `MANUAL.md` | Full installation + troubleshooting guide | No — keep in sync when adding features |
+
+## Backends per stage
+
+Each stage stays swappable. CLI flags are familiar from upstream:
+`--stt`, `--llm_backend`, `--tts`. Default values are baked into
+`scripts/rpi_start.sh`'s `PIPELINE_ARGS`; override there or set
+`S2S_*` env vars.
+
+Current defaults:
+
+```bash
+--stt faster-whisper
+    --faster_whisper_stt_model_name  base.en
+    --faster_whisper_stt_device       cpu
+    --faster_whisper_stt_compute_type int8
+    --faster_whisper_stt_gen_language en
+--llm_backend chat-completions
+    --model_name gemma4-e2b          # from LITERT_LM_MODEL_ALIAS
+    --responses_api_base_url http://127.0.0.1:9379/v1
+--tts supertonic-http
+    --supertonic_http_tts_base_url http://127.0.0.1:9002/v1
+```
+
+VAD is tuned for Pi speakers + half-duplex mic:
+
+```bash
+--thresh 0.7                  # was upstream 0.6 (more selective)
+--min_silence_ms 900          # was upstream 64 — absorbs TTS echo + speech pauses
+--min_speech_ms 320
+--speech_pad_ms 500
+--speculative_reopen_ms 1500  # keeps the same turn alive over short pauses
+--unanswered_reopen_ms 9000
+```
+
+How to switch stages (without changing `rpi_start.sh`):
+- **STT**: edit `--stt` to `moonshine-http` and add `--moonshine_http_stt_base_url http://127.0.0.1:9001/v1`. Set `MOONSHINE_DEFAULT_MODEL` in `models/.env` first.
+- **LLM**: edit `--llm_backend` to `responses-api` (legacy OpenAI / vLLM / llama.cpp) or `cactus` (Cactus Compute runtime). Swap `LITERT_LM_MODEL_ALIAS` accordingly.
+- **TTS**: edit `--tts` to one of `qwen3` / `kokoro` / `pocket` / `chatTTS` / `facebookMMS` (all upstream).
+
+## Hard-won lessons (read before touching the VAD/STT layer)
+
+1. **Never enable `--enable_realtime_transcription` together with a non-streaming STT.** Upstream `s2s_pipeline.py` used to couple these so a non-streaming STT saw 200–800 ms slices and produced 1–2-word hallucinations that won the race to the client. The fork adds an explicit `--enable_vad_realtime` flag (default off); leave it off unless the STT backend actually streams partials.
+2. **Half-duplex the mic during TTS playback.** Without this, the Pi's own TTS audio gets re-captured by the mic and triggers a runaway VAD loop. The browser WS client sets `track.enabled = false` on `response.audio.delta` and re-enables on `response.done`. The user's manual mute button keeps priority.
+3. **Moonshine hallucinates on real-world audio.** Even with full audio delivered, Moonshine's seq2seq architecture produces repetitive/fabricated text on noisy input (documented behaviour, see `UsefulSensors/moonshine` model card). Use `faster-whisper` or a transducer model (parakeet-tdt) for anything but the cleanest studio mic.
+4. **mkcert is mandatory for browser mic access.** `getUserMedia()` refuses plain HTTP LAN origins. The demo serves `/rootCA.pem` directly so the user can trust the CA in their browser.
+5. **Token cap on seq2seq ASR is per-second of audio, not per-call.** Moonshine model card recommends 6.5 tokens/s; this is too tight for short conversational turns and truncates "Hello, how are you" to "Hello." For longer audio this is a non-issue; for short utterances either raise the cap or switch to a non-seq2seq backend.
+
+## Hard-won lessons (LLM server side)
+
+6. **OpenAI Python SDK 1.x flattens `extra_body` into the top-level JSON body.** It does NOT wrap your `extra_body={...}` under an `extra_body` key — the SDK unpacks it so each key in your dict appears at the top level of the request body. If you read `req["extra_body"]` on the server you'll get `None`. Either accept the keys top-level (`req["session_id"]`), or look in both places. Symptom: client says "everything's fine, server gets the request, just ignores my custom field."
+7. **`__pycache__/*.pyc` files outlive `git checkout` and edits.** Python 3.7+ keys `.pyc` files by source-hash, so a stale `.pyc` from a prior build will keep being used until you either delete it or until you `import` in a fresh process. Symptom in this project: `service.register()` updates are present on disk but a long-running pipeline keeps calling the old version. Always delete `__pycache__/` before restarting when you change code under `src/speech_to_speech/` or `src/servers/`.
+8. **LiteRT-LM `cancel_process()` during the prefill phase leaves the conversation broken.** Subsequent `send_message()` calls raise `Session is not prefilled yet`. Don't try to "reuse" a cancelled conversation — drop it and create fresh. This is what the per-session `ConversationPool` in `litert_lm_mtp_server.py` does.
+
+## Backlog (To Do)
+
+See `CHANGELOG.md` → "Backlog" for the full list with rationale and
+expected effort. Headline items:
+
+- **STT is now the dominant slow stage** (~14 s for 5 s audio with
+  `faster-whisper base.en` int8). LLM warm-turn latency dropped
+  from ~13 s to ~3–4 s after the Conversation-Pool fix. Levers:
+  `parakeet-tdt-0.6b-v3` via `onnx-asr` (faster + partials) or a
+  smaller faster-whisper model.
+- **`response.create` race condition.** The LLM is POSTed 0.5 s after `session.update`, before the VAD has had time to soft-end and the STT has produced a transcript. Has been seen in probes; not yet reproduced in the browser session.
+- **Parakeet-TDT-0.6b-v3** via `onnx-asr` for better STT WER plus true partial-transcription support.
+- **Acoustic echo cancellation.** Half-duplex works but feels clunky. Real AEC (`speexdsp`, `webrtc-audio-processing`) would let the mic stay open with speakers.
+- **Live transcription overlay** in the demo. Currently no STT backend streams partials; parakeet-TDT would unblock this.
+
+## Out of Scope (do not do without asking)
+
+- Republishing to PyPI or running `.github/workflows/publish.yml`.
+- Editing anything under `archive/`.
+- Pointing `--responses_api_base_url` at OpenAI / HF Inference Providers / OpenRouter as a "temporary" fallback. Local-only is a hard requirement.
+- Committing model weights, `models/`, `dist/`, `build/`, `uv.lock`, or anything under `*.profraw` / `*.profdata`.
+- Pushing back to `huggingface/speech-to-speech` upstream. This fork lives in our own git repo (see "What this is").
+- Switching STT / LLM / TTS backends in the launcher without a written note in `CHANGELOG.md` first.
+
+## Smoke Check
+
+After changing anything in the VAD/STT/LLM/TTS path:
+
+```bash
+./scripts/verify_rpi_fork.sh        # 8/10 currently: 2 fails are the legacy
+                                    # moonshine-health checks (moonshine-stt-server
+                                    # is no longer running by default — expected)
+./scripts/_ws_pipeline_probe.py    # manual probe with a known audio file
+```
+
+If the browser session fails but the probe passes, the bug is in the
+browser-side audio capture (mic permission, half-duplex state, mkcert
+CA), not the server pipeline.
+
+## Useful one-liners
+
+```bash
+# What is on each port right now
+ss -lntp | grep -E ':8765|:9001|:9002|:9379'
+
+# Pipeline process tree
+./scripts/rpi_status.sh
+
+# Stop everything cleanly
+./scripts/rpi_stop.sh
+
+# Watch a single pipeline session
+tail -f models/log/speech-to-speech.log | grep -E 'soft-end|started|Transcription|chat/completions'
+```
