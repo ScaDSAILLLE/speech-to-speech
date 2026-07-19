@@ -95,6 +95,22 @@ class ChatCompletionsApiModelHandler(BaseOpenAICompatibleHandler):
     def warmup(self) -> None:
         logger.info(f"Warming up {self.__class__.__name__}")
         start = time.time()
+
+        # LiteRT-LM (and similar model servers) load the model on first
+        # request — that can take 30-60 s on a Pi. The OpenAI SDK retries with
+        # exponential backoff but only ~21 s total, which races the load.
+        # Poll /v1/models first until the endpoint responds, then run the
+        # actual warmup call against an already-warm server.
+        if self.client.base_url and self._wait_for_endpoint():
+            logger.info(
+                f"{self.__class__.__name__}: model endpoint is up, sending warmup request"
+            )
+        else:
+            logger.warning(
+                f"{self.__class__.__name__}: endpoint not reachable after timeout, "
+                "warmup may fail — proceeding anyway"
+            )
+
         self.client.with_options(max_retries=WARMUP_MAX_RETRIES).chat.completions.create(
             model=self.model_name,
             messages=[
@@ -106,6 +122,27 @@ class ChatCompletionsApiModelHandler(BaseOpenAICompatibleHandler):
         )
         end = time.time()
         logger.info(f"{self.__class__.__name__}:  warmed up! time: {(end - start):.3f} s")
+
+    def _wait_for_endpoint(self, timeout: float = 180.0, interval: float = 1.0) -> bool:
+        """Block until GET /v1/models returns 2xx or `timeout` seconds elapse.
+
+        Returns True if the endpoint is reachable, False on timeout. Cheap
+        HEAD probe so we don't trigger model load twice.
+        """
+        import httpx
+
+        deadline = time.time() + timeout
+        base_url = str(self.client.base_url).rstrip('/')
+        url = f"{base_url}/models"
+        while time.time() < deadline:
+            try:
+                resp = httpx.get(url, timeout=2.0)
+                if 200 <= resp.status_code < 300:
+                    return True
+            except Exception:
+                pass
+            time.sleep(interval)
+        return False
 
     def _build_compaction_generate_fn(self) -> CompactGenerateFn:
         """Return a generate fn that calls Chat Completions for compaction."""
@@ -192,13 +229,17 @@ class ChatCompletionsApiModelHandler(BaseOpenAICompatibleHandler):
 
     def _request(self, api_input: list[dict[str, Any]], optional_kwargs: dict[str, Any]) -> Any:
         create_kwargs: dict[str, Any] = dict(optional_kwargs)
+        session_id = create_kwargs.pop("__session_id", None)
         if self.stream:
             create_kwargs["stream_options"] = {"include_usage": True}
+        extra_body: dict[str, Any] = dict(self._extra_body) if self._extra_body else {}
+        if session_id:
+            extra_body["session_id"] = session_id
         return self.client.chat.completions.create(
             model=self.model_name,
             messages=api_input,  # type: ignore[arg-type]  # runtime dicts match the Chat Completions message shape
             stream=self.stream,
-            extra_body=self._extra_body,
+            extra_body=extra_body or None,
             timeout=self.request_timeout,
             **create_kwargs,
         )

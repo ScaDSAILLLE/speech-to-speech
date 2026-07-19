@@ -92,6 +92,7 @@ class _Turn(BaseModel):
     runtime_config: Any
     response: Any
     turn_id: str | None
+    session_id: str | None = None
     turn_revision: int | None
     speech_stopped_at_s: float | None
     wants_audio: bool
@@ -562,6 +563,9 @@ class BaseOpenAICompatibleHandler(BaseHandler[LLMIn, LLMOut], ABC):
             active_chat.add_item(make_user_message(f"Please reply to my message in {lang_name}."))
 
         optional_kwargs = self._build_optional_kwargs(req_tools, req_tool_choice)
+        sid = getattr(runtime_config, "session_id", None)
+        if sid:
+            optional_kwargs["__session_id"] = sid
 
         # CancelScope.is_stale(gen) is checked when the stream iterator advances; a
         # blocked read inside httpx cannot be aborted by cancel_scope.cancel() from
@@ -577,6 +581,7 @@ class BaseOpenAICompatibleHandler(BaseHandler[LLMIn, LLMOut], ABC):
             turn_revision=turn_revision,
             speech_stopped_at_s=speech_stopped_at_s,
             wants_audio=wants_audio,
+            session_id=getattr(runtime_config, "session_id", None),
         )
         yield from self._generate(active_chat, original_chat, turn, optional_kwargs)
 

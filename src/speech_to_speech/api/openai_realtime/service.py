@@ -225,6 +225,7 @@ class RealtimeService:
         if self.speculative_turns:
             self.speculative_turns.reset()
         state = ConnState(runtime_config=RuntimeConfig(chat=Chat(self._chat_size)))
+        state.runtime_config.session_id = state.session_id
         self._conns[state.session_id] = state
         self.total_usage.connections += 1
         return state.session_id

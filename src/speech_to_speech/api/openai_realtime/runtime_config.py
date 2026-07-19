@@ -42,6 +42,7 @@ class RuntimeConfig(BaseModel):
         default_factory=lambda: RealtimeSessionCreateRequest(type="realtime"),
         validate_default=True,
     )
+    session_id: str | None = None
 
     @field_validator("session", mode="after")
     @classmethod
