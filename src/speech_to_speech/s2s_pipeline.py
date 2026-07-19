@@ -35,6 +35,9 @@ from speech_to_speech.arguments_classes.mlx_audio_whisper_arguments import (
     MLXAudioWhisperSTTHandlerArguments,
 )
 from speech_to_speech.arguments_classes.module_arguments import ModuleArguments
+from speech_to_speech.arguments_classes.moonshine_http_stt_arguments import (
+    MoonshineHttpSTTHandlerArguments,
+)
 from speech_to_speech.arguments_classes.paraformer_stt_arguments import ParaformerSTTHandlerArguments
 from speech_to_speech.arguments_classes.parakeet_tdt_arguments import (
     ParakeetTDTSTTHandlerArguments,
@@ -46,6 +49,9 @@ from speech_to_speech.arguments_classes.responses_api_language_model_arguments i
 )
 from speech_to_speech.arguments_classes.socket_receiver_arguments import SocketReceiverArguments
 from speech_to_speech.arguments_classes.socket_sender_arguments import SocketSenderArguments
+from speech_to_speech.arguments_classes.supertonic_http_tts_arguments import (
+    SupertonicHttpTTSHandlerArguments,
+)
 from speech_to_speech.arguments_classes.vad_arguments import VADHandlerArguments
 from speech_to_speech.arguments_classes.websocket_streamer_arguments import WebSocketStreamerArguments
 from speech_to_speech.arguments_classes.whisper_stt_arguments import WhisperSTTHandlerArguments
@@ -100,6 +106,7 @@ class ParsedArguments:
     faster_whisper_stt_handler_kwargs: FasterWhisperSTTHandlerArguments
     mlx_audio_whisper_stt_handler_kwargs: MLXAudioWhisperSTTHandlerArguments
     parakeet_tdt_stt_handler_kwargs: ParakeetTDTSTTHandlerArguments
+    moonshine_http_stt_handler_kwargs: MoonshineHttpSTTHandlerArguments
     language_model_handler_kwargs: LanguageModelHandlerArguments
     responses_api_language_model_handler_kwargs: ResponsesApiLanguageModelHandlerArguments
     chat_tts_handler_kwargs: ChatTTSHandlerArguments
@@ -107,6 +114,7 @@ class ParsedArguments:
     pocket_tts_handler_kwargs: PocketTTSHandlerArguments
     kokoro_tts_handler_kwargs: KokoroTTSHandlerArguments
     qwen3_tts_handler_kwargs: Qwen3TTSHandlerArguments
+    supertonic_http_tts_handler_kwargs: SupertonicHttpTTSHandlerArguments
 
 
 def rename_args(args: Any, prefix: str) -> None:
@@ -159,12 +167,14 @@ def parse_arguments() -> ParsedArguments:
             FasterWhisperSTTHandlerArguments,
             MLXAudioWhisperSTTHandlerArguments,
             ParakeetTDTSTTHandlerArguments,
+            MoonshineHttpSTTHandlerArguments,
             _lm_class,
             ChatTTSHandlerArguments,
             FacebookMMSTTSHandlerArguments,
             PocketTTSHandlerArguments,
             KokoroTTSHandlerArguments,
             Qwen3TTSHandlerArguments,
+            SupertonicHttpTTSHandlerArguments,
         )
     )
 
@@ -188,6 +198,7 @@ def parse_arguments() -> ParsedArguments:
         faster_whisper_stt_handler_kwargs=by_type[FasterWhisperSTTHandlerArguments],
         mlx_audio_whisper_stt_handler_kwargs=by_type[MLXAudioWhisperSTTHandlerArguments],
         parakeet_tdt_stt_handler_kwargs=by_type[ParakeetTDTSTTHandlerArguments],
+        moonshine_http_stt_handler_kwargs=by_type[MoonshineHttpSTTHandlerArguments],
         language_model_handler_kwargs=by_type.get(LanguageModelHandlerArguments, LanguageModelHandlerArguments()),
         # The OpenAI-compatible slot holds whichever class was registered:
         # ChatCompletions... (a subclass) for chat-completions, else ResponsesApi....
@@ -200,6 +211,7 @@ def parse_arguments() -> ParsedArguments:
         pocket_tts_handler_kwargs=by_type[PocketTTSHandlerArguments],
         kokoro_tts_handler_kwargs=by_type[KokoroTTSHandlerArguments],
         qwen3_tts_handler_kwargs=by_type[Qwen3TTSHandlerArguments],
+        supertonic_http_tts_handler_kwargs=by_type[SupertonicHttpTTSHandlerArguments],
     )
 
 
@@ -293,6 +305,7 @@ def prepare_all_args(
     faster_whisper_stt_handler_kwargs: FasterWhisperSTTHandlerArguments,
     mlx_audio_whisper_stt_handler_kwargs: MLXAudioWhisperSTTHandlerArguments,
     parakeet_tdt_stt_handler_kwargs: ParakeetTDTSTTHandlerArguments,
+    moonshine_http_stt_handler_kwargs: MoonshineHttpSTTHandlerArguments,
     language_model_handler_kwargs: LanguageModelHandlerArguments,
     responses_api_language_model_handler_kwargs: ResponsesApiLanguageModelHandlerArguments,
     chat_tts_handler_kwargs: ChatTTSHandlerArguments,
@@ -300,6 +313,7 @@ def prepare_all_args(
     pocket_tts_handler_kwargs: PocketTTSHandlerArguments,
     kokoro_tts_handler_kwargs: KokoroTTSHandlerArguments,
     qwen3_tts_handler_kwargs: Qwen3TTSHandlerArguments,
+    supertonic_http_tts_handler_kwargs: SupertonicHttpTTSHandlerArguments,
 ) -> None:
     prepare_module_args(
         module_kwargs,
@@ -308,6 +322,7 @@ def prepare_all_args(
         paraformer_stt_handler_kwargs,
         mlx_audio_whisper_stt_handler_kwargs,
         parakeet_tdt_stt_handler_kwargs,
+        moonshine_http_stt_handler_kwargs,
         language_model_handler_kwargs,
         responses_api_language_model_handler_kwargs,
         chat_tts_handler_kwargs,
@@ -315,6 +330,7 @@ def prepare_all_args(
         pocket_tts_handler_kwargs,
         kokoro_tts_handler_kwargs,
         qwen3_tts_handler_kwargs,
+        supertonic_http_tts_handler_kwargs,
     )
 
     rename_args(whisper_stt_handler_kwargs, "stt")
@@ -322,6 +338,7 @@ def prepare_all_args(
     rename_args(paraformer_stt_handler_kwargs, "paraformer_stt")
     rename_args(mlx_audio_whisper_stt_handler_kwargs, "mlx_audio_whisper")
     rename_args(parakeet_tdt_stt_handler_kwargs, "parakeet_tdt")
+    rename_args(moonshine_http_stt_handler_kwargs, "moonshine_http_stt")
     rename_args(language_model_handler_kwargs, "llm")
     rename_args(responses_api_language_model_handler_kwargs, "responses_api")
     rename_args(chat_tts_handler_kwargs, "chat_tts")
@@ -329,6 +346,7 @@ def prepare_all_args(
     rename_args(pocket_tts_handler_kwargs, "pocket_tts")
     rename_args(kokoro_tts_handler_kwargs, "kokoro")
     rename_args(qwen3_tts_handler_kwargs, "qwen3_tts")
+    rename_args(supertonic_http_tts_handler_kwargs, "supertonic_http_tts")
 
 
 def initialize_queues_and_events() -> dict[str, Any]:
@@ -368,6 +386,7 @@ def _build_pipeline_handlers(
     paraformer_stt_handler_kwargs: ParaformerSTTHandlerArguments,
     mlx_audio_whisper_stt_handler_kwargs: MLXAudioWhisperSTTHandlerArguments,
     parakeet_tdt_stt_handler_kwargs: ParakeetTDTSTTHandlerArguments,
+    moonshine_http_stt_handler_kwargs: MoonshineHttpSTTHandlerArguments,
     language_model_handler_kwargs: LanguageModelHandlerArguments,
     responses_api_language_model_handler_kwargs: ResponsesApiLanguageModelHandlerArguments,
     chat_tts_handler_kwargs: ChatTTSHandlerArguments,
@@ -375,6 +394,7 @@ def _build_pipeline_handlers(
     pocket_tts_handler_kwargs: PocketTTSHandlerArguments,
     kokoro_tts_handler_kwargs: KokoroTTSHandlerArguments,
     qwen3_tts_handler_kwargs: Qwen3TTSHandlerArguments,
+    supertonic_http_tts_handler_kwargs: SupertonicHttpTTSHandlerArguments,
     speculative_turns: SpeculativeTurnTracker | None = None,
 ) -> list[Any]:
     """Build the shared handler chain: VAD → STT → TranscriptionNotifier → LM → LMOutputProcessor → TTS.
@@ -411,6 +431,7 @@ def _build_pipeline_handlers(
         paraformer_stt_handler_kwargs,
         mlx_audio_whisper_stt_handler_kwargs,
         parakeet_tdt_stt_handler_kwargs,
+        moonshine_http_stt_handler_kwargs,
     )
 
     lm = get_llm_handler(
@@ -440,6 +461,7 @@ def _build_pipeline_handlers(
         pocket_tts_handler_kwargs,
         kokoro_tts_handler_kwargs,
         qwen3_tts_handler_kwargs,
+        supertonic_http_tts_handler_kwargs,
     )
 
     return [vad, stt, transcription_notifier, lm, lm_processor, tts]
@@ -456,6 +478,7 @@ def _build_realtime_pipeline_unit(
     paraformer_stt_handler_kwargs: ParaformerSTTHandlerArguments,
     mlx_audio_whisper_stt_handler_kwargs: MLXAudioWhisperSTTHandlerArguments,
     parakeet_tdt_stt_handler_kwargs: ParakeetTDTSTTHandlerArguments,
+    moonshine_http_stt_handler_kwargs: MoonshineHttpSTTHandlerArguments,
     language_model_handler_kwargs: LanguageModelHandlerArguments,
     responses_api_language_model_handler_kwargs: ResponsesApiLanguageModelHandlerArguments,
     chat_tts_handler_kwargs: ChatTTSHandlerArguments,
@@ -463,6 +486,7 @@ def _build_realtime_pipeline_unit(
     pocket_tts_handler_kwargs: PocketTTSHandlerArguments,
     kokoro_tts_handler_kwargs: KokoroTTSHandlerArguments,
     qwen3_tts_handler_kwargs: Qwen3TTSHandlerArguments,
+    supertonic_http_tts_handler_kwargs: SupertonicHttpTTSHandlerArguments,
 ) -> "PipelineUnit":
     """Build one isolated realtime pipeline (own queues, events, service, handlers).
 
@@ -479,6 +503,7 @@ def _build_realtime_pipeline_unit(
     paraformer_kw = deepcopy(paraformer_stt_handler_kwargs)
     mlx_audio_whisper_kw = deepcopy(mlx_audio_whisper_stt_handler_kwargs)
     parakeet_kw = deepcopy(parakeet_tdt_stt_handler_kwargs)
+    moonshine_http_kw = deepcopy(moonshine_http_stt_handler_kwargs)
     lm_kw = deepcopy(language_model_handler_kwargs)
     responses_api_kw = deepcopy(responses_api_language_model_handler_kwargs)
     chat_tts_kw = deepcopy(chat_tts_handler_kwargs)
@@ -486,6 +511,7 @@ def _build_realtime_pipeline_unit(
     pocket_tts_kw = deepcopy(pocket_tts_handler_kwargs)
     kokoro_tts_kw = deepcopy(kokoro_tts_handler_kwargs)
     qwen3_tts_kw = deepcopy(qwen3_tts_handler_kwargs)
+    supertonic_http_tts_kw = deepcopy(supertonic_http_tts_handler_kwargs)
 
     should_listen = Event()
     response_playing = Event()
@@ -510,6 +536,7 @@ def _build_realtime_pipeline_unit(
         pocket_tts_kw,
         chat_tts_kw,
         facebook_mms_kw,
+        supertonic_http_tts_kw,
     ):
         vars(kw)["cancel_scope"] = cancel_scope
         vars(kw)["speculative_turns"] = speculative_turns
@@ -526,9 +553,19 @@ def _build_realtime_pipeline_unit(
         speculative_turns=speculative_turns,
     )
 
+    # Decouple VAD progressive emission from live transcription display.
+    # `enable_live_transcription` is a UI flag (show partials as the user
+    # speaks) that requires `enable_realtime_transcription` to actually
+    # produce useful partials — but for non-streaming STT backends like
+    # Moonshine, the progressive emission creates truncated, hallucinated
+    # transcripts (200-800 ms of audio → 1-2 word output) that race the real
+    # transcript on the wire. Only enable it when the STT backend actually
+    # streams, or when the user explicitly opts in via the new
+    # `enable_vad_realtime` flag (added in vN).
     if module_kwargs.enable_live_transcription:
-        vad_kw.enable_realtime_transcription = True
         vad_kw.realtime_processing_pause = module_kwargs.live_transcription_update_interval
+    if getattr(module_kwargs, "enable_vad_realtime", False):
+        vad_kw.enable_realtime_transcription = True
 
     handlers = _build_pipeline_handlers(
         stop_event=stop_event,
@@ -552,6 +589,7 @@ def _build_realtime_pipeline_unit(
         paraformer_stt_handler_kwargs=paraformer_kw,
         mlx_audio_whisper_stt_handler_kwargs=mlx_audio_whisper_kw,
         parakeet_tdt_stt_handler_kwargs=parakeet_kw,
+        moonshine_http_stt_handler_kwargs=moonshine_http_kw,
         language_model_handler_kwargs=lm_kw,
         responses_api_language_model_handler_kwargs=responses_api_kw,
         chat_tts_handler_kwargs=chat_tts_kw,
@@ -559,6 +597,7 @@ def _build_realtime_pipeline_unit(
         pocket_tts_handler_kwargs=pocket_tts_kw,
         kokoro_tts_handler_kwargs=kokoro_tts_kw,
         qwen3_tts_handler_kwargs=qwen3_tts_kw,
+        supertonic_http_tts_handler_kwargs=supertonic_http_tts_kw,
         speculative_turns=speculative_turns,
     )
     for h in handlers:
@@ -589,6 +628,7 @@ def build_pipeline(
     paraformer_stt_handler_kwargs: ParaformerSTTHandlerArguments,
     mlx_audio_whisper_stt_handler_kwargs: MLXAudioWhisperSTTHandlerArguments,
     parakeet_tdt_stt_handler_kwargs: ParakeetTDTSTTHandlerArguments,
+    moonshine_http_stt_handler_kwargs: MoonshineHttpSTTHandlerArguments,
     language_model_handler_kwargs: LanguageModelHandlerArguments,
     responses_api_language_model_handler_kwargs: ResponsesApiLanguageModelHandlerArguments,
     chat_tts_handler_kwargs: ChatTTSHandlerArguments,
@@ -596,6 +636,7 @@ def build_pipeline(
     pocket_tts_handler_kwargs: PocketTTSHandlerArguments,
     kokoro_tts_handler_kwargs: KokoroTTSHandlerArguments,
     qwen3_tts_handler_kwargs: Qwen3TTSHandlerArguments,
+    supertonic_http_tts_handler_kwargs: SupertonicHttpTTSHandlerArguments,
     queues_and_events: dict[str, Any],
 ) -> ThreadManager:
     stop_event = queues_and_events["stop_event"]
@@ -651,6 +692,7 @@ def build_pipeline(
                 paraformer_stt_handler_kwargs=paraformer_stt_handler_kwargs,
                 mlx_audio_whisper_stt_handler_kwargs=mlx_audio_whisper_stt_handler_kwargs,
                 parakeet_tdt_stt_handler_kwargs=parakeet_tdt_stt_handler_kwargs,
+                moonshine_http_stt_handler_kwargs=moonshine_http_stt_handler_kwargs,
                 language_model_handler_kwargs=language_model_handler_kwargs,
                 responses_api_language_model_handler_kwargs=responses_api_language_model_handler_kwargs,
                 chat_tts_handler_kwargs=chat_tts_handler_kwargs,
@@ -658,6 +700,7 @@ def build_pipeline(
                 pocket_tts_handler_kwargs=pocket_tts_handler_kwargs,
                 kokoro_tts_handler_kwargs=kokoro_tts_handler_kwargs,
                 qwen3_tts_handler_kwargs=qwen3_tts_handler_kwargs,
+                supertonic_http_tts_handler_kwargs=supertonic_http_tts_handler_kwargs,
             )
             for i in range(pool_size)
         ]
@@ -667,6 +710,8 @@ def build_pipeline(
             pool=pool,
             host=websocket_streamer_kwargs.ws_host,
             port=websocket_streamer_kwargs.ws_port,
+            ssl_keyfile=websocket_streamer_kwargs.ws_ssl_keyfile,
+            ssl_certfile=websocket_streamer_kwargs.ws_ssl_certfile,
         )
 
         all_handlers: list[Any] = [realtime_server]
@@ -695,10 +740,11 @@ def build_pipeline(
             ),
         ]
 
-    # Set VAD realtime transcription parameters from module_kwargs
+    # Same coupling fix as in _build_realtime_pipeline_unit above.
     if module_kwargs.enable_live_transcription:
-        vad_handler_kwargs.enable_realtime_transcription = True
         vad_handler_kwargs.realtime_processing_pause = module_kwargs.live_transcription_update_interval
+    if getattr(module_kwargs, "enable_vad_realtime", False):
+        vad_handler_kwargs.enable_realtime_transcription = True
 
     if module_kwargs.llm_backend in ("responses-api", "chat-completions"):
         _lm_vars = vars(responses_api_language_model_handler_kwargs)
@@ -735,6 +781,7 @@ def build_pipeline(
         paraformer_stt_handler_kwargs=paraformer_stt_handler_kwargs,
         mlx_audio_whisper_stt_handler_kwargs=mlx_audio_whisper_stt_handler_kwargs,
         parakeet_tdt_stt_handler_kwargs=parakeet_tdt_stt_handler_kwargs,
+        moonshine_http_stt_handler_kwargs=moonshine_http_stt_handler_kwargs,
         language_model_handler_kwargs=language_model_handler_kwargs,
         responses_api_language_model_handler_kwargs=responses_api_language_model_handler_kwargs,
         chat_tts_handler_kwargs=chat_tts_handler_kwargs,
@@ -742,6 +789,7 @@ def build_pipeline(
         pocket_tts_handler_kwargs=pocket_tts_handler_kwargs,
         kokoro_tts_handler_kwargs=kokoro_tts_handler_kwargs,
         qwen3_tts_handler_kwargs=qwen3_tts_handler_kwargs,
+        supertonic_http_tts_handler_kwargs=supertonic_http_tts_handler_kwargs,
     )
 
     return ThreadManager([*comms_handlers, *pipeline_handlers])
@@ -758,6 +806,7 @@ def get_stt_handler(
     paraformer_stt_handler_kwargs: ParaformerSTTHandlerArguments,
     mlx_audio_whisper_stt_handler_kwargs: MLXAudioWhisperSTTHandlerArguments,
     parakeet_tdt_stt_handler_kwargs: ParakeetTDTSTTHandlerArguments,
+    moonshine_http_stt_handler_kwargs: MoonshineHttpSTTHandlerArguments,
 ) -> BaseHandler[STTIn, STTOut]:
     from speech_to_speech.STT.base_stt_handler import BaseSTTHandler
 
@@ -841,9 +890,21 @@ def get_stt_handler(
                 setup_kwargs=setup_kwargs,
             )
         )
+    elif module_kwargs.stt == "moonshine-http":
+        from speech_to_speech.STT.moonshine_http_handler import MoonshineHttpSTTHandler
+
+        return with_speculative_turns(
+            MoonshineHttpSTTHandler(
+                stop_event,
+                queue_in=spoken_prompt_queue,
+                queue_out=text_prompt_queue,
+                setup_kwargs=vars(moonshine_http_stt_handler_kwargs),
+            )
+        )
     else:
         raise ValueError(
-            "The STT should be either whisper, whisper-mlx, mlx-audio-whisper, faster-whisper, parakeet-tdt, or paraformer."
+            "The STT should be either whisper, whisper-mlx, mlx-audio-whisper, faster-whisper, "
+            "parakeet-tdt, paraformer, or moonshine-http."
         )
 
 
@@ -915,6 +976,7 @@ def get_tts_handler(
     pocket_tts_handler_kwargs: PocketTTSHandlerArguments,
     kokoro_tts_handler_kwargs: KokoroTTSHandlerArguments,
     qwen3_tts_handler_kwargs: Qwen3TTSHandlerArguments,
+    supertonic_http_tts_handler_kwargs: SupertonicHttpTTSHandlerArguments,
 ) -> BaseHandler[TTSIn, TTSOut]:
     if module_kwargs.tts == "chatTTS":
         try:
@@ -977,8 +1039,20 @@ def get_tts_handler(
             setup_args=(should_listen,),
             setup_kwargs=vars(qwen3_tts_handler_kwargs),
         )
+    elif module_kwargs.tts == "supertonic-http":
+        from speech_to_speech.TTS.supertonic_http_handler import SupertonicHttpTTSHandler
+
+        return SupertonicHttpTTSHandler(
+            stop_event,
+            queue_in=lm_response_queue,
+            queue_out=send_audio_chunks_queue,
+            setup_args=(should_listen,),
+            setup_kwargs=vars(supertonic_http_tts_handler_kwargs),
+        )
     else:
-        raise ValueError("The TTS should be either chatTTS, facebookMMS, pocket, kokoro, or qwen3")
+        raise ValueError(
+            "The TTS should be either chatTTS, facebookMMS, pocket, kokoro, qwen3, or supertonic-http"
+        )
 
 
 def main() -> None:
@@ -996,6 +1070,7 @@ def main() -> None:
         args.faster_whisper_stt_handler_kwargs,
         args.mlx_audio_whisper_stt_handler_kwargs,
         args.parakeet_tdt_stt_handler_kwargs,
+        args.moonshine_http_stt_handler_kwargs,
         args.language_model_handler_kwargs,
         args.responses_api_language_model_handler_kwargs,
         args.chat_tts_handler_kwargs,
@@ -1003,6 +1078,7 @@ def main() -> None:
         args.pocket_tts_handler_kwargs,
         args.kokoro_tts_handler_kwargs,
         args.qwen3_tts_handler_kwargs,
+        args.supertonic_http_tts_handler_kwargs,
     )
 
     # Validate after prepare_all_args(): --local_mac_optimal_settings mutates
@@ -1040,6 +1116,7 @@ def main() -> None:
         args.paraformer_stt_handler_kwargs,
         args.mlx_audio_whisper_stt_handler_kwargs,
         args.parakeet_tdt_stt_handler_kwargs,
+        args.moonshine_http_stt_handler_kwargs,
         args.language_model_handler_kwargs,
         args.responses_api_language_model_handler_kwargs,
         args.chat_tts_handler_kwargs,
@@ -1047,6 +1124,7 @@ def main() -> None:
         args.pocket_tts_handler_kwargs,
         args.kokoro_tts_handler_kwargs,
         args.qwen3_tts_handler_kwargs,
+        args.supertonic_http_tts_handler_kwargs,
         queues_and_events,
     )
 

@@ -21,7 +21,7 @@ import { $, truncateError, DEBUG } from "./ui/dom.js";
 import { ChatView } from "./ui/chat.js";
 import { Account } from "./ui/account.js";
 
-const DEFAULT_VOICE = "Aiden";
+const DEFAULT_VOICE = "M1";
 const DEFAULT_INSTRUCTIONS =
   "You are a friendly voice assistant. " +
   "Keep replies short, warm, and spoken. Avoid long monologues.";
@@ -932,13 +932,27 @@ function readGateThreshold() {
 
 /** Adapt the connection field to the mode learned from /api/config. */
 function syncConnectionUi() {
+  connHint.replaceChildren();
   if (pinnedUrl) {
     // Deploy-pinned URL: show it, but locked — the deployment owns it.
     connField.hidden = false;
     inputLbUrl.value = pinnedUrl;
     inputLbUrl.readOnly = true;
     connHint.classList.remove("error");
-    connHint.textContent = "Speech-to-speech server URL pinned by this deployment.";
+    connHint.append(
+      document.createTextNode("Speech-to-speech server URL pinned by this deployment. ")
+    );
+    // Self-signed pipeline (wss://<ip>:port) — surface the CA download right
+    // here so the user can fix TLS trust without having to hit an error first.
+    if (/^wss:\/\/(?!localhost|127\.0\.0\.1|\[::1\])/i.test(pinnedUrl)) {
+      const a = document.createElement("a");
+      a.href = "/rootCA.pem";
+      a.download = "rootCA.pem";
+      a.textContent = "Download mkcert CA";
+      a.title =
+        "Save rootCA.pem, then import it into your browser's trust store and restart the browser.";
+      connHint.append(a);
+    }
   } else if (allowDirect) {
     // Direct mode: the user sets their own s2s server URL.
     connField.hidden = false;
@@ -949,7 +963,7 @@ function syncConnectionUi() {
     connHint.textContent =
       "URL of your speech-to-speech server, e.g. http://localhost:8080 (the app adds /v1/realtime).";
   } else {
-    // LB mode: the load balancer URL is deployment-owned — hide it entirely so
+    // LB mode: the load-balancer URL is deployment-owned — hide it entirely so
     // its address is never exposed in Settings.
     connField.hidden = true;
   }
@@ -1052,16 +1066,39 @@ async function handleStartError(err) {
   onFatalError(err);
 }
 
+/** True while the model is speaking; flips from the `ai-speaking` WS event.
+ *  Used to drop the mic during TTS playback so its echo doesn't re-trigger
+ *  the VAD. */
+let aiMuted = false;
+
+/** Recompute mic track.enabled from the two mute flags and push the value
+ *  to the WS client + button UI. The mic is enabled only when neither the
+ *  user nor the AI has muted it. */
+function applyMicEnabled() {
+  if (!micStream) return;
+  const enabled = !micMuted && !aiMuted;
+  for (const track of micStream.getAudioTracks()) {
+    track.enabled = enabled;
+  }
+  if (client) client.setMuted(!enabled);
+  // Button reflects the user-only flag so it doesn't fight the AI mute.
+  micBtn.classList.toggle("muted", micMuted);
+  const label = micMuted ? "Unmute" : "Mute";
+  micBtn.setAttribute("aria-label", label);
+  micBtn.title = aiMuted && !micMuted ? "Muted while AI is speaking" : label;
+}
+
+/** Called from the WS `ai-speaking` event. Drops the mic while the model
+ *  is talking; user mute (if any) is preserved. */
+function setMicMutedByAi(speaking) {
+  aiMuted = !!speaking;
+  applyMicEnabled();
+}
+
 micBtn.addEventListener("click", () => {
   if (!micStream || !client) return;
   micMuted = !micMuted;
-  for (const track of micStream.getAudioTracks()) {
-    track.enabled = !micMuted;
-  }
-  client.setMuted(micMuted);
-  micBtn.classList.toggle("muted", micMuted);
-  micBtn.setAttribute("aria-label", micMuted ? "Unmute" : "Mute");
-  micBtn.title = micMuted ? "Unmute" : "Mute";
+  applyMicEnabled();
 });
 
 stopBtn.addEventListener("click", async () => {
@@ -1189,6 +1226,14 @@ async function doStart(audioContext = null) {
     ...(audioContext ? { audioContext } : {}),
   });
   client = c;
+
+  // Half-duplex: automatically mute the mic while the model is speaking so
+  // its own TTS audio doesn't echo back into the VAD and retrigger itself.
+  // The user can still press the manual mute button to take over.
+  c.addEventListener("ai-speaking", (e) => {
+    const { speaking } = /** @type {CustomEvent<{ speaking: boolean }>} */ (e).detail;
+    setMicMutedByAi(speaking);
+  });
 
   c.addEventListener("queue", (e) => {
     const { position, queueId } = /** @type {CustomEvent<{ position: number; queueId: string }>} */ (e).detail;
@@ -1405,6 +1450,7 @@ async function teardown() {
   // The webcam is independent of the call lifecycle (it runs while the user is
   // on the page), so we leave it on here — only the camera toggle stops it.
   micMuted = false;
+  aiMuted = false;
   micBtn.classList.remove("muted");
   setState("idle");
   // Refresh the chip's remaining-today after the budget moved.
@@ -1416,11 +1462,45 @@ function onFatalError(err) {
   console.error("[main] fatal:", err);
   setState("error");
   const message = err instanceof Error ? err.message : String(err);
-  setCaption(truncateError(message), "error");
+  // Pin the error message to a persistent element so the user can actually
+  // read it before teardown() resets the caption back to "Tap to start".
+  showErrorBanner(message);
   void teardown().catch(() => {
     setState("error");
-    setCaption(truncateError(message), "error");
+    showErrorBanner(message);
   });
+}
+
+/** Show a sticky error message under the orb. Cleared on next click. */
+function showErrorBanner(message) {
+  let banner = /** @type {HTMLElement|null} */ (
+    document.querySelector("#error-banner")
+  );
+  if (!banner) {
+    banner = document.createElement("p");
+    banner.id = "error-banner";
+    banner.className = "error-banner";
+    document.querySelector(".stage").appendChild(banner);
+  }
+  // Reset and rebuild content so repeated calls don't pile up children.
+  banner.replaceChildren();
+  const text = document.createElement("span");
+  text.className = "error-banner-text";
+  text.textContent = truncateError(message);
+  banner.appendChild(text);
+  // WebSocket close 1015 (TLS handshake failure) means the browser doesn't
+  // trust the local mkcert CA. Offer the CA download + one-click instructions.
+  if (/1015|tls|certificate/i.test(message)) {
+    const hint = document.createElement("a");
+    hint.className = "error-banner-link";
+    hint.href = "/rootCA.pem";
+    hint.download = "rootCA.pem";
+    hint.textContent = "Download mkcert CA";
+    hint.title =
+      "Save rootCA.pem, then import it into your browser's trust store and restart the browser.";
+    banner.appendChild(hint);
+  }
+  banner.hidden = false;
 }
 
 setState("idle");

@@ -354,6 +354,21 @@ def create_app(pool: list[PipelineUnit], stop_event: ThreadingEvent) -> FastAPI:
                     err = unit.service.handle_session_update(session_id, event)
                     if err:
                         await _send_event(ws, err)
+                    else:
+                        # OpenAI Realtime protocol expects the server to
+                        # acknowledge a successful session.update with a
+                        # session.updated event. Without it, browser clients
+                        # that wait for the ack hang or abort the session.
+                        from openai.types.realtime import SessionUpdatedEvent
+                        cfg = unit.service._state(session_id).runtime_config
+                        await _send_event(
+                            ws,
+                            SessionUpdatedEvent(
+                                type="session.updated",
+                                event_id=unit.service._next_event_id(),
+                                session=cfg.session,
+                            ),
+                        )
 
                 elif isinstance(event, ConversationItemCreateEvent):
                     events = unit.service.handle_conversation_item_create(session_id, event)

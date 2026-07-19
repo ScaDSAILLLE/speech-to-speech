@@ -229,3 +229,18 @@ dmypy.json
 cover/
 .tox/
 uv.lock
+
+# RPi fork: model weights, runtime state, and build artifacts live here.
+models/
+*.gguf
+*.onnx
+*.safetensors
+models/run/
+models/log/
+models/tls/
+models/.env
+
+# Rust / cargo-pgo / llvm-profdata profiling artifacts
+*.profraw
+*.profdata
+default.profraw

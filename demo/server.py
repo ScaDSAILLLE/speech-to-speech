@@ -46,7 +46,7 @@ import os
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -440,6 +440,25 @@ async def session_end(request: Request):
     if sid:
         await asyncio.to_thread(limiter.end, sid)
     return {"ok": True}
+
+
+# Serve the mkcert root CA so browser-PCs can download and trust the local
+# TLS certs (8765 pipeline + 7860 demo). Without trusting the CA, browsers
+# silently refuse WebSocket connections (close code 1015) and there's no
+# "proceed anyway" dialog to dismiss. Served at a stable URL so the demo UI
+# can link to it from the settings panel.
+_MKCERT_CAROOT = os.environ.get("MKCERT_CAROOT", "").strip()
+
+
+@app.get("/rootCA.pem")
+def root_ca_pem():
+    if not _MKCERT_CAROOT or not os.path.isfile(_MKCERT_CAROOT):
+        raise HTTPException(status_code=404, detail="mkcert rootCA.pem not found")
+    return FileResponse(
+        _MKCERT_CAROOT,
+        media_type="application/x-pem-file",
+        filename="rootCA.pem",
+    )
 
 
 # Static front-end. Registered last so the /api routes win. `html=True` serves

@@ -212,6 +212,18 @@ export class S2sWsRealtimeClient extends EventTarget {
     this.dispatchEvent(new CustomEvent("status", { detail: { status } }));
   }
 
+  /** Single writer for `_aiSpeaking`. Dispatches an `ai-speaking` event whenever
+   *  the flag flips so the UI can mute the mic automatically while the model
+   *  is talking — without that, TTS echo triggers VAD re-triggers endlessly.
+   *  @param {boolean} on */
+  _setAiSpeaking(on) {
+    if (this._aiSpeaking === on) return;
+    this._aiSpeaking = on;
+    this.dispatchEvent(
+      new CustomEvent("ai-speaking", { detail: { speaking: on } })
+    );
+  }
+
   /** Full assistant transcript so far for a response: the completed segments
    *  plus the in-progress one, all space-joined.
    *  @param {string} rid @returns {string} */
@@ -635,11 +647,11 @@ export class S2sWsRealtimeClient extends EventTarget {
       case "input_audio_buffer.speech_started":
         // User started speaking — stop any audio still playing OR queued, every
         // time. We clear unconditionally (not just when `_aiSpeaking`): after a
-        // reply or a tool result the worklet's ring buffer can still be draining
+        // barge-in the playback tail might still hold a few hundred ms of audio
         // even though we already flipped `_aiSpeaking` off, and that tail would
         // otherwise keep playing over the user's barge-in.
-        this._playbackNode?.port.postMessage({ kind: "clear" });
-        this._aiSpeaking = false;
+
+        this._setAiSpeaking(false);
         this._setStatus("user-speaking");
         break;
 
@@ -669,7 +681,7 @@ export class S2sWsRealtimeClient extends EventTarget {
         const rid = event.response_id ?? event.response?.id;
         if (rid) this._audibleResponses.add(rid);
         if (!this._aiSpeaking) {
-          this._aiSpeaking = true;
+          this._setAiSpeaking(true);
           this._markAudible();
         }
         break;
@@ -684,7 +696,7 @@ export class S2sWsRealtimeClient extends EventTarget {
       }
 
       case "response.done": {
-        this._aiSpeaking = false;
+        this._setAiSpeaking(false);
         // This response freed the slot (completion OR cancellation both arrive
         // as response.done). Decrement and, if a create was waiting, replay it.
         this._openResponses = Math.max(0, this._openResponses - 1);

@@ -868,6 +868,35 @@ a:hover {
 }
 .circle-subcaption[hidden] { display: none; }
 
+/* Persistent error message under the orb. Stays visible across teardown so
+ * the user can actually read what failed before clicking again. */
+.error-banner {
+  margin: 18px auto 0;
+  max-width: 44ch;
+  padding: 10px 14px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--error);
+  background: rgba(255, 80, 80, 0.08);
+  border: 1px solid rgba(255, 80, 80, 0.25);
+  border-radius: 8px;
+  text-align: center;
+  word-break: break-word;
+}
+.error-banner[hidden] { display: none; }
+.error-banner-link {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 12.5px;
+  color: #fff;
+  background: rgba(255, 80, 80, 0.35);
+  border: 1px solid rgba(255, 80, 80, 0.5);
+  border-radius: 6px;
+  text-decoration: none;
+}
+.error-banner-link:hover { background: rgba(255, 80, 80, 0.55); }
+
 /* Queue actions sit under the caption: "Join now" (primary, only when it's your
  * turn) stacked above the quiet "Leave queue" escape hatch. */
 .queue-actions {
@@ -1440,6 +1469,12 @@ body.cam-on .footer {
   border-radius: 4px;
   border: 1px solid var(--border);
 }
+.field small a {
+  color: var(--accent);
+  text-decoration: underline;
+  margin-left: 4px;
+}
+.field small a:hover { color: var(--accent-strong, var(--accent)); }
 
 /* Noise gate: a header with a live value, a level meter, and a range slider
    that shares the meter's horizontal (dB) axis. */

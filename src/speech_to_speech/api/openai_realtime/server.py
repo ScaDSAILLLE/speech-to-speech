@@ -25,26 +25,37 @@ class RealtimeServer:
         pool: list[PipelineUnit],
         host: str = "0.0.0.0",
         port: int = 8765,
+        ssl_keyfile: str | None = None,
+        ssl_certfile: str | None = None,
     ) -> None:
         if not pool:
             raise ValueError("RealtimeServer requires at least one PipelineUnit in the pool")
+        if (ssl_keyfile is None) != (ssl_certfile is None):
+            raise ValueError(
+                "RealtimeServer: --ws_ssl_keyfile and --ws_ssl_certfile must be set together."
+            )
         self.stop_event = stop_event
         self.pool = pool
         self.host = host
         self.port = port
+        self.ssl_keyfile = ssl_keyfile
+        self.ssl_certfile = ssl_certfile
 
     def run(self) -> None:
         """Start the FastAPI/uvicorn server (called from a ThreadManager thread)."""
         app = create_app(pool=self.pool, stop_event=self.stop_event)
 
+        scheme = "wss" if self.ssl_keyfile else "ws"
         logger.info(
-            f"OpenAI Realtime API starting on ws://{self.host}:{self.port}/v1/realtime (pool size {len(self.pool)})"
+            f"OpenAI Realtime API starting on {scheme}://{self.host}:{self.port}/v1/realtime (pool size {len(self.pool)})"
         )
 
         config = uvicorn.Config(
             app,
             host=self.host,
             port=self.port,
+            ssl_keyfile=self.ssl_keyfile,
+            ssl_certfile=self.ssl_certfile,
             log_level="info",
         )
         server = uvicorn.Server(config)
