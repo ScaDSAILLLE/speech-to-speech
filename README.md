@@ -1,8 +1,11 @@
 # speech-to-speech — Raspberry Pi fork
 
+> [!NOTE]
+> **Fork notice.** This repository is a fork of [`huggingface/speech-to-speech`](https://github.com/huggingface/speech-to-speech), maintained at **ScaDS.AI Living Lab** (Universität Leipzig) and re-wired for fully-local inference on a Raspberry Pi 5. All upstream code is © The HuggingFace Inc. team, licensed under the Apache License 2.0 — see [`LICENSE`](./LICENSE). The list of changes lives in the **What changed vs upstream** section below and in [`CHANGELOG.md`](./CHANGELOG.md).
+
 Fully-local, voice-agent pipeline for the Raspberry Pi. VAD → STT → LLM → TTS, with every model served from the same machine and every stage talking OpenAI-compatible protocols.
 
-> **Heads-up.** This is a working fork of [`huggingface/speech-to-speech`](https://github.com/huggingface/speech-to-speech), trimmed and re-wired for a CPU-first Pi. The upstream codebase remains the source of truth for the realtime WebSocket server, the OpenAI Realtime protocol implementation, and the demo UI; we add a swappable in-process HTTP-client layer for STT and TTS so each model can run in its own process.
+> **Heads-up.** This fork is trimmed and re-wired for a CPU-first Pi. The upstream codebase remains the source of truth for the realtime WebSocket server, the OpenAI Realtime protocol implementation, and the demo UI; we add a swappable in-process HTTP-client layer for STT and TTS so each model can run in its own process.
 
 ---
 
