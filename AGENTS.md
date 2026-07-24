@@ -129,6 +129,54 @@ How to switch stages (without changing `rpi_start.sh`):
 7. **`__pycache__/*.pyc` files outlive `git checkout` and edits.** Python 3.7+ keys `.pyc` files by source-hash, so a stale `.pyc` from a prior build will keep being used until you either delete it or until you `import` in a fresh process. Symptom in this project: `service.register()` updates are present on disk but a long-running pipeline keeps calling the old version. Always delete `__pycache__/` before restarting when you change code under `src/speech_to_speech/` or `src/servers/`.
 8. **LiteRT-LM `cancel_process()` during the prefill phase leaves the conversation broken.** Subsequent `send_message()` calls raise `Session is not prefilled yet`. Don't try to "reuse" a cancelled conversation — drop it and create fresh. This is what the per-session `ConversationPool` in `litert_lm_mtp_server.py` does.
 
+## Hard-won lessons (GitHub SSH key per session)
+
+The fork pushes to a private GitHub repo over SSH. The SSH key
+(`~/.ssh/id_ed25519`) is passphrase-protected and there is no
+persistent agent setup yet, so every fresh shell session (each
+Termius login, each new tmux pane, each `opencode` tool call) needs
+the agent brought up and the key unlocked before `git push` works.
+
+**At the start of every session, run these two commands in one
+shell (Termius, not in the opencode Bash tool — the tool's short-lived
+subshells cannot hold the passphrase prompt):**
+
+```bash
+eval "$(ssh-agent -s)"
+ssh-add ~/.ssh/id_ed25519
+# Enter the passphrase once.
+```
+
+Then `git push` works for the rest of that session.
+
+**If `git push` from a non-interactive shell (opencode, scripts,
+CI) fails with `Permission denied (publickey)`:** the agent socket
+that was started in your interactive shell isn't visible to the
+new shell. Either:
+
+1. Re-export the socket in that shell:
+   ```bash
+   export SSH_AUTH_SOCK="$(ls -td /tmp/ssh-*/agent.* | head -1)"
+   ```
+2. Or re-run the `eval "$(ssh-agent -s)" && ssh-add` above.
+
+**If you want the agent to persist across logins** (so the
+passphrase is asked once per Pi reboot instead of once per SSH
+session), set up `keychain` or a systemd-user `ssh-agent.service`.
+Both are valid; `keychain` is the smaller change:
+
+```bash
+sudo apt install -y keychain
+echo 'eval $(keychain --eval --quiet ~/.ssh/id_ed25519)' >> ~/.bashrc
+```
+
+Deliberately **not** done in this repo: removing the passphrase
+from the key (convenient but stores the key in plaintext on the
+SD card) and force-pushing to the fork's `main` (would lose
+upstream's WebRTC + session-teardown fixes). Use the `rpi-port`
+branch as the working branch and merge into `main` via PR when
+ready.
+
 ## Backlog (To Do)
 
 See `CHANGELOG.md` → "Backlog" for the full list with rationale and
