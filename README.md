@@ -161,29 +161,6 @@ curl -X POST http://127.0.0.1:9002/v1/audio/speech \
 - [`CHANGELOG.md`](./CHANGELOG.md) — project history by theme (project framing, STT switch, bug fixes, TLS, packaging, cleanup), plus the active backlog.
 - [`demo/README.md`](./demo/README.md) — browser UI setup (upstream docs).
 
-## Hosting on our own Git
-
-This is a foreign repository; we never commit to it. Recommended workflow:
-
-1. Create the new repo on our Git host: `git init speech-to-speech-rpi.git` (or use the web UI to create it).
-2. From this working copy, point it at the new origin:
-   ```bash
-   git remote rename origin upstream       # the foreign fork
-   git remote add origin git@<host>:<org>/speech-to-speech-rpi.git
-   git add -A
-   git commit -m "RPi fork: faster-whisper + litert-lm + supertonic on Pi 5"
-   git push -u origin main
-   ```
-3. Optionally keep the upstream remote read-only for syncs:
-   ```bash
-   git remote set-url upstream https://github.com/huggingface/speech-to-speech.git
-   git fetch upstream
-   git merge upstream/main --no-ff -m "Merge upstream main"
-   ```
-4. Tag a first release: `git tag -a v0.1.0 -m "First working RPi port"`.
-
-The PyPI publishing workflow is intentionally **not** ported. The fork stays on our git only; we don't republish to PyPI or push tags upstream.
-
 ## License
 
 Apache-2.0 (inherited from upstream). See [`LICENSE`](./LICENSE).
